@@ -24,3 +24,7 @@ To use Session Scribe, run the main script and provide the path to your audio fi
 ```bash
 python main.py --audio /path/to/your/audio/file
 ```
+
+
+## For longer aduio 
+https://platform.openai.com/docs/guides/speech-to-text/longer-inputs

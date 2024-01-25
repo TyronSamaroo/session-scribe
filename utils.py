@@ -17,11 +17,13 @@ def transcribe_audio(audio_file_path):
 
 def meeting_minutes(transcription):
     abstract_summary = abstract_summary_extraction(transcription)
+    detailed_outline = generate_detailed_outline(transcription)
     key_points = key_points_extraction(transcription)
     action_items = action_item_extraction(transcription)
     sentiment = sentiment_analysis(transcription)
     return {
         'abstract_summary': abstract_summary,
+        'generate_detailed_outline': detailed_outline,
         'key_points': key_points,
         'action_items': action_items,
         'sentiment': sentiment
@@ -81,6 +83,24 @@ def action_item_extraction(transcription):
     )
     return response.choices[0].message.content
 
+def generate_detailed_outline(transcription):
+    response = client.chat.completions.create(
+        model="gpt-4",
+        temperature=0,
+        messages=[
+            {
+                "role": "system",
+                "content": "You are an AI expert in analyzing conversations, understanding their context, and creating detailed outlines. Please review the text, consider its context, and generate a structured outline that includes the main topics, subtopics, and key points discussed. The outline should be organized, clear, and provide a comprehensive overview of the discussion, keeping in mind the context and nuances of the conversation."
+            },
+            {
+                "role": "user",
+                "content": transcription
+            }
+        ]
+    )
+    return response.choices[0].message.content
+
+
 def sentiment_analysis(transcription):
     response = client.chat.completions.create(
         model="gpt-4",
@@ -108,3 +128,5 @@ def save_as_docx(minutes, filename):
         # Add a line break between sections
         doc.add_paragraph()
     doc.save(filename)
+
+
