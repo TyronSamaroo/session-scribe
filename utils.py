@@ -1,35 +1,73 @@
+from pydantic import BaseModel
+from typing import Dict, Optional
 from docx import Document
 import openai
 import os
 from dotenv import load_dotenv
 load_dotenv()
-
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 openai.api_key = os.environ["OPENAI_API_KEY"]
 client = openai.OpenAI(api_key=openai.api_key)
 
-def transcribe_audio(audio_file_path):
-    with open(audio_file_path, 'rb') as audio_file:
-        print("Transcribing audio file...")
-        transcription = client.audio.transcriptions.create(model="whisper-1", file=audio_file)
-        print(transcription)
-    return transcription.text
+class AudioFileInfo(BaseModel):
+    audio_file_path: str
 
-def meeting_minutes(transcription):
-    abstract_summary = abstract_summary_extraction(transcription)
-    detailed_outline = generate_detailed_outline(transcription)
-    key_points = key_points_extraction(transcription)
-    action_items = action_item_extraction(transcription)
-    sentiment = sentiment_analysis(transcription)
-    return {
-        'abstract_summary': abstract_summary,
-        'generate_detailed_outline': detailed_outline,
-        'key_points': key_points,
-        'action_items': action_items,
-        'sentiment': sentiment
-    }
+class TranscriptionOutput(BaseModel):
+    transcription_text: str
 
-def abstract_summary_extraction(transcription):
+
+class MeetingMinutesOutput(BaseModel):
+    abstract_summary: Optional[str]
+    detailed_outline: Optional[str]
+    key_points: Optional[str]
+    action_items: Optional[str]
+    sentiment: Optional[str]
+
+class SaveAsDocxInput(BaseModel):
+    minutes: MeetingMinutesOutput
+    filename: str
+
+
+def transcribe_audio(input: AudioFileInfo) -> Optional[TranscriptionOutput]:
+    try:
+        with open(input.audio_file_path, 'rb') as audio_file:
+            logger.info("Transcribing audio file...")
+            transcription = client.audio.transcriptions.create(model="whisper-1", file=audio_file)
+            logger.info(transcription)
+        return TranscriptionOutput(transcription_text=transcription.text)
+    except Exception as e:
+        logger.error(f"An error occurred while transcribing audio: {e}")
+        return None
+
+def meeting_minutes(transcription: TranscriptionOutput) -> Optional[MeetingMinutesOutput]:
+    try:
+        text = transcription.transcription_text
+        logger.info("Extracting abstract summary...")
+        abstract_summary = abstract_summary_extraction(text)
+        logger.info("Generating detailed outline...")
+        detailed_outline = generate_detailed_outline(text)
+        logger.info("Extracting key points...")
+        key_points = key_points_extraction(text)
+        logger.info("Extracting action items...")
+        action_items = action_item_extraction(text)
+        logger.info("Performing sentiment analysis...")
+        sentiment = sentiment_analysis(text)
+        logger.info("Creating MeetingMinutesOutput object...")
+        return MeetingMinutesOutput(
+            abstract_summary=abstract_summary,
+            detailed_outline=detailed_outline,
+            key_points=key_points,
+            action_items=action_items,
+            sentiment=sentiment
+        )
+    except Exception as e:
+        logger.error(f"An error occurred while generating meeting minutes: {e}")
+        return None
+    
+def abstract_summary_extraction(transcription: str) -> str:
     response = client.chat.completions.create(
         model="gpt-4",
         temperature=0,
@@ -48,7 +86,7 @@ def abstract_summary_extraction(transcription):
     return response.choices[0].message.content
 
 
-def key_points_extraction(transcription):
+def key_points_extraction(transcription: str) -> str:
     response = client.chat.completions.create(
         model="gpt-4",
         temperature=0,
@@ -66,7 +104,7 @@ def key_points_extraction(transcription):
     return response.choices[0].message.content
     
 
-def action_item_extraction(transcription):
+def action_item_extraction(transcription: str) -> str:
     response = client.chat.completions.create(
         model="gpt-4",
         temperature=0,
@@ -83,7 +121,7 @@ def action_item_extraction(transcription):
     )
     return response.choices[0].message.content
 
-def generate_detailed_outline(transcription):
+def generate_detailed_outline(transcription: str) -> str:
     response = client.chat.completions.create(
         model="gpt-4",
         temperature=0,
@@ -101,7 +139,7 @@ def generate_detailed_outline(transcription):
     return response.choices[0].message.content
 
 
-def sentiment_analysis(transcription):
+def sentiment_analysis(transcription: str) -> str:
     response = client.chat.completions.create(
         model="gpt-4",
         temperature=0,
@@ -118,15 +156,34 @@ def sentiment_analysis(transcription):
     )
     return response.choices[0].message.content
 
-def save_as_docx(minutes, filename):
+def save_as_docx(input: SaveAsDocxInput):
     doc = Document()
-    for key, value in minutes.items():
+    for key, value in input.minutes.items():
         # Replace underscores with spaces and capitalize each word for the heading
         heading = ' '.join(word.capitalize() for word in key.split('_'))
         doc.add_heading(heading, level=1)
         doc.add_paragraph(value)
         # Add a line break between sections
         doc.add_paragraph()
-    doc.save(filename)
+    doc.save(input.filename)
 
+def transcribe_audio_if_confirmed(input_data: AudioFileInfo) -> Optional[TranscriptionOutput]:
+    print("Please note that transcribing the audio will incur charges to your OpenAI account.")
+    confirm_transcription = input("Are you sure you want to transcribe the audio? (yes/no): ")
+    if confirm_transcription.lower() == 'yes':
+        return transcribe_audio(input_data.audio_file_path)
+    else:
+        print("Transcription cancelled.")
+        return None
 
+def generate_minutes_if_confirmed(transcription: TranscriptionOutput) -> Optional[MeetingMinutesOutput]:
+    if transcription is None:
+        return None
+
+    print("Please note that generating meeting minutes with GPT-4 will incur charges to your OpenAI account.")
+    confirm_minutes = input("Are you sure you want to generate meeting minutes? (yes/no): ")
+    if confirm_minutes.lower() == 'yes':
+        return meeting_minutes(transcription.transcription_text)
+    else:
+        print("Meeting minutes generation cancelled.")
+        return None
