@@ -1,6 +1,10 @@
 from docx import Document
 import openai
 import os
+import argparse
+from dotenv import load_dotenv
+load_dotenv()
+
 
 openai.api_key = os.environ["OPENAI_API_KEY"]
 client = openai.OpenAI(api_key=openai.api_key)
@@ -108,7 +112,13 @@ def save_as_docx(minutes, filename):
     doc.save(filename)
 
 
-audio_file_path = "mentor-01-24-24.mp3"
-minutes = meeting_minutes(audio_file_path)
-print(minutes)
-save_as_docx(minutes, 'meeting_minutes.docx')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Transcribe an audio file and generate meeting minutes.')
+    parser.add_argument('--audio', type=str, default='default_audio.mp3', help='The path to the audio file to transcribe.')
+    parser.add_argument('--output', type=str, default='meeting_minutes.docx', help='The filename to save the meeting minutes as.')
+
+    args = parser.parse_args()
+
+    minutes = meeting_minutes(args.audio)
+    print(minutes)
+    save_as_docx(minutes, args.output)
